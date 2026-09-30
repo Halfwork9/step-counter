@@ -13,20 +13,20 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.view.LayoutInflater
+import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ProgressBar
 import android.widget.TextView
 import java.text.SimpleDateFormat
 import java.util.Calendar
-import java.util.Date
 import java.util.Locale
 
 class MainActivity : Activity() {
 
     private lateinit var prefs: SharedPreferences
     private var hasSensor = true
+    private var testStart = -1
     private val handler = Handler(Looper.getMainLooper())
     private val refreshTask = object : Runnable {
         override fun run() {
@@ -44,9 +44,16 @@ class MainActivity : Activity() {
             .getDefaultSensor(Sensor.TYPE_STEP_COUNTER) != null
 
         findViewById<Button>(R.id.btnTrack).setOnClickListener {
-            if (ensurePermissions()) startTracking()
+            if (isServiceRunning()) {
+                prefs.edit().putBoolean(Store.TRACKING_ENABLED, false).apply()
+                stopService(Intent(this, StepService::class.java))
+                refresh()
+            } else if (ensurePermissions()) {
+                startTracking()
+            }
         }
-        findViewById<TextView>(R.id.tvSettings).setOnClickListener { showSettings() }
+        findViewById<Button>(R.id.btnSettings).setOnClickListener { showSettings() }
+        findViewById<Button>(R.id.btnTest).setOnClickListener { toggleTest() }
 
         ensurePermissions()
     }
@@ -93,9 +100,32 @@ class MainActivity : Activity() {
 
     private fun startTracking() {
         if (!hasSensor) return
+        val wasStoppedByUser = !prefs.getBoolean(Store.TRACKING_ENABLED, true)
+        prefs.edit().putBoolean(Store.TRACKING_ENABLED, true).apply()
+        if (wasStoppedByUser) {
+            // skip the steps that happened while tracking was stopped
+            prefs.edit().putBoolean(Store.RESET_BASELINE, true).apply()
+        }
         if (Build.VERSION.SDK_INT >= 26) startForegroundService(Intent(this, StepService::class.java))
         else startService(Intent(this, StepService::class.java))
         refresh()
+    }
+
+    private fun toggleTest() {
+        val current = prefs.getInt(Store.TODAY_STEPS, 0)
+        val tvTest = findViewById<TextView>(R.id.tvTest)
+        val btnTest = findViewById<Button>(R.id.btnTest)
+        if (testStart < 0) {
+            testStart = current
+            btnTest.text = "⏹ End test walk"
+            tvTest.visibility = View.VISIBLE
+            tvTest.text = "Test walk: 0 steps — phone in pocket, start walking"
+        } else {
+            val walked = current - testStart
+            testStart = -1
+            btnTest.text = "🧪 Test walk"
+            tvTest.text = "Last test: $walked steps counted"
+        }
     }
 
     private fun refresh() {
@@ -134,6 +164,12 @@ class MainActivity : Activity() {
         findViewById<TextView>(R.id.tvStatus).apply {
             this.text = text
             setTextColor(color)
+        }
+        findViewById<Button>(R.id.btnTrack).text =
+            if (running) "⏹ Stop tracking" else "▶ Start tracking"
+
+        if (testStart >= 0) {
+            findViewById<TextView>(R.id.tvTest).text = "Test walk: ${steps - testStart} steps so far"
         }
 
         val streak = computeStreak(goal)
