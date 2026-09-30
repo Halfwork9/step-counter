@@ -14,6 +14,8 @@ object Store {
     const val GOAL = "goal"
     const val HEIGHT = "height_cm"
     const val WEIGHT = "weight_kg"
+    const val TRACKING_ENABLED = "tracking_enabled"
+    const val RESET_BASELINE = "reset_baseline"
 
     private val dayFmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 
