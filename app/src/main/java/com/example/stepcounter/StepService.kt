@@ -62,7 +62,14 @@ class StepService : Service(), SensorEventListener {
         handler.post(ticker)
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // If the user pressed Start after stopping, skip steps taken while paused
+        if (prefs.getBoolean(Store.RESET_BASELINE, false)) {
+            lastTotal = -1
+            prefs.edit().putBoolean(Store.RESET_BASELINE, false).apply()
+        }
+        return START_STICKY
+    }
 
     override fun onSensorChanged(event: SensorEvent?) {
         event ?: return
